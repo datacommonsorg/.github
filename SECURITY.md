@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-Please report any security vulnerabilities by emailing us at [support@datacommons.org](mailto:support@datacommons.org). Please do not open a public issue or pull request.
+Please report any security vulnerabilities by emailing us at [support@datacommons.org](mailto:support@datacommons.org). Please do not open a public issue or pull request. We will acknowledge receipt of your report within 48 hours and keep you updated on the progress of our investigation.
 
 ### What to Include in the Report
 
