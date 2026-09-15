@@ -1,0 +1,42 @@
+name: Manage stale issues and PRs
+
+# Runs daily across all 12 public repositories to:
+#   1. Mark issues and PRs with no activity for 90 days as "stale" with a notice.
+#   2. Auto-close "stale" items with no activity after an additional 30 days.
+#   3. Remove the "stale" label if new activity occurs.
+
+on:
+  schedule:
+    # Daily at 09:00 UTC.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview actions without posting comments or closing items'
+        type: boolean
+        default: true
+      max_writes:
+        description: 'Maximum comment/close actions per run (rate-limit safety)'
+        type: string
+        default: '150'
+
+concurrency:
+  group: manage-stale-items
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned to a commit hash to satisfy the org's mandatory zizmor policy.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Manage stale issues and pull requests
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && '1' || '0') || '0' }}
+          MAX_WRITES: ${{ inputs.max_writes || '150' }}
+        run: ./scripts/manage_stale_items.sh
