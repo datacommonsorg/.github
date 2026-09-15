@@ -1,0 +1,41 @@
+name: Sync non-core PRs to triage project
+
+# Adds external and bot pull requests from all public repos to project 15
+# and sets their Contributor field. Core team PRs are skipped.
+#
+# Issues reach the project through the project's own auto-add workflows.
+# Pull requests need this job because project filters cannot match on author.
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub may delay scheduled runs under load.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Classify and report without changing the project'
+        type: boolean
+        default: false
+
+# Never let two syncs overlap; a slow run would otherwise double-add.
+concurrency:
+  group: sync-project-prs
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync pull requests
+        env:
+          # Classic PAT with read:org, project, repo.
+          # The default GITHUB_TOKEN cannot read team membership or write to
+          # organization projects, so it will not work here.
+          GH_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: ./scripts/sync_project_prs.sh
