@@ -43,7 +43,7 @@ WAIT_FOR_BUDGET="${WAIT_FOR_BUDGET:-0}"
 
 # Robot accounts that are members of the core team but should count as bots.
 # They are ordinary user accounts, so the account-type check cannot catch them.
-CORE_ROBOTS="datcom-bot datacommons-robot-author dc-org2018"
+CORE_ROBOTS=(datcom-bot datacommons-robot-author dc-org2018)
 
 REPOS=(
   agent-toolkit api-python data datacommons deployment-engine docsite
@@ -143,8 +143,13 @@ echo "project: $PROJECT_TITLE (#$PROJECT_NUMBER)"
 # ---------------------------------------------------------------------------
 gh api "/orgs/$ORG/teams/$TEAM/members?per_page=100" --paginate \
   --jq '.[].login | ascii_downcase' | sort -u > "$WORK/roster.txt"
-printf '%s\n' $CORE_ROBOTS | sort -u > "$WORK/robots.txt"
 echo "roster:  $(wc -l < "$WORK/roster.txt" | tr -d ' ') members of @$ORG/$TEAM"
+
+# Membership is tested once per item, so keep the lookups in the shell rather
+# than spawning grep a few thousand times. GitHub logins cannot contain
+# spaces, so space-delimited containment is an exact match.
+ROSTER=" $(tr '\n' ' ' < "$WORK/roster.txt") "
+ROBOTS=" ${CORE_ROBOTS[*]} "
 
 # ---------------------------------------------------------------------------
 # What the project already holds, with each item's current field value.
@@ -179,29 +184,35 @@ echo "tracked: $(wc -l < "$WORK/tracked.tsv" | tr -d ' ') items already in the p
 echo
 
 classify() {  # login, account type -> Core | External | Bot
-  if [[ "$2" == "Bot" ]] || grep -qx "$1" "$WORK/robots.txt"; then
+  if [[ "$2" == "Bot" || "$ROBOTS" == *" $1 "* ]]; then
     echo Bot
-  elif grep -qx "$1" "$WORK/roster.txt"; then
+  elif [[ "$ROSTER" == *" $1 "* ]]; then
     echo Core
   else
     echo External
   fi
 }
 
-added=0 stamped=0 ok=0 failed=0
+added=0 stamped=0 ok=0 failed=0 unlisted=0
+
+# The issues endpoint returns pull requests as well, and pulls responses have
+# no .pull_request key, so this one filter both de-duplicates the issues list
+# and passes every pull request through.
+ITEM_JQ='.[] | select(.pull_request == null)
+         | [.html_url, (.user.login | ascii_downcase), .user.type] | @tsv'
 
 for repo in "${REPOS[@]}"; do
-  # The issues endpoint returns pull requests too, so filter those out and take
-  # them from the pulls endpoint instead.
-  {
-    gh api "/repos/$ORG/$repo/issues?state=open&per_page=100" --paginate \
-      --jq '.[] | select(.pull_request == null)
-            | [.html_url, (.user.login | ascii_downcase), .user.type] | @tsv' \
-      2>/dev/null || true
-    gh api "/repos/$ORG/$repo/pulls?state=open&per_page=100" --paginate \
-      --jq '.[] | [.html_url, (.user.login | ascii_downcase), .user.type] | @tsv' \
-      2>/dev/null || true
-  } > "$WORK/items.tsv"
+  : > "$WORK/items.tsv"
+  for endpoint in issues pulls; do
+    # Errors are deliberately left on stderr. Hiding them would make a repo we
+    # cannot read look identical to a repo with nothing open, and the board
+    # would quietly go stale for it.
+    if ! gh api "/repos/$ORG/$repo/$endpoint?state=open&per_page=100" --paginate \
+           --jq "$ITEM_JQ" >> "$WORK/items.tsv"; then
+      echo "  could not list $endpoint for $repo" >&2
+      unlisted=$((unlisted + 1))
+    fi
+  done
 
   while IFS=$'\t' read -r url login type; do
     [[ -z "$url" ]] && continue
@@ -248,6 +259,10 @@ done
 
 echo "added $added, stamped $stamped, already correct $ok, failed $failed"
 
+if [[ "$unlisted" -gt 0 ]]; then
+  echo "$unlisted repo listing(s) could not be read; those repos are incomplete."
+fi
+
 if [[ -n "$BUDGET_STALLED" ]]; then
   echo
   echo "Stopped early: the hourly GraphQL budget ran out. The remaining items"
@@ -255,4 +270,6 @@ if [[ -n "$BUDGET_STALLED" ]]; then
   echo "wait for the reset instead."
 fi
 
-[[ "$failed" -eq 0 ]]
+# Running out of budget is normal and resumes next run, so it is not a failure.
+# A write that failed, or a repo we could not read, is.
+[[ "$failed" -eq 0 && "$unlisted" -eq 0 ]]
