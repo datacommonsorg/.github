@@ -1,0 +1,47 @@
+name: Sync triage project
+
+# Adds open issues and pull requests from the public repos to project 15 and
+# sets their Contributor field to Core, External or Bot.
+#
+# Issues also arrive instantly through the project's own auto-add workflows,
+# but those cannot set a field, so this job tags what they added. Pull requests
+# depend on this job entirely, because project filters cannot match on author.
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub may delay scheduled runs under load.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Classify and report without changing the project'
+        type: boolean
+        default: false
+
+# Never let two syncs overlap; a slow run would otherwise double-add.
+concurrency:
+  group: sync-project-items
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned to a hash: the org's zizmor policy rejects version tags, which
+      # are mutable and can be repointed at new code.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Sync issues and pull requests
+        env:
+          # Classic PAT with read:org, project, repo.
+          # The default GITHUB_TOKEN cannot read team membership or write to
+          # organization projects, so it will not work here.
+          GH_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          # Stop when the hourly GraphQL budget runs out rather than waiting;
+          # the next scheduled run resumes where this one left off.
+          WAIT_FOR_BUDGET: '0'
+        run: ./scripts/sync_project_items.sh
