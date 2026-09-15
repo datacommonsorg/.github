@@ -1,10 +1,11 @@
-name: Sync non-core PRs to triage project
+name: Sync triage project
 
-# Adds external and bot pull requests from all public repos to project 15
-# and sets their Contributor field. Core team PRs are skipped.
+# Adds open issues and pull requests from the public repos to project 15 and
+# sets their Contributor field to Core, External or Bot.
 #
-# Issues reach the project through the project's own auto-add workflows.
-# Pull requests need this job because project filters cannot match on author.
+# Issues also arrive instantly through the project's own auto-add workflows,
+# but those cannot set a field, so this job tags what they added. Pull requests
+# depend on this job entirely, because project filters cannot match on author.
 
 on:
   schedule:
@@ -19,7 +20,7 @@ on:
 
 # Never let two syncs overlap; a slow run would otherwise double-add.
 concurrency:
-  group: sync-project-prs
+  group: sync-project-items
   cancel-in-progress: false
 
 permissions: {}
@@ -31,11 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync pull requests
+      - name: Sync issues and pull requests
         env:
           # Classic PAT with read:org, project, repo.
           # The default GITHUB_TOKEN cannot read team membership or write to
           # organization projects, so it will not work here.
           GH_TOKEN: ${{ secrets.PROJECT_SYNC_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
-        run: ./scripts/sync_project_prs.sh
+          # Stop when the hourly GraphQL budget runs out rather than waiting;
+          # the next scheduled run resumes where this one left off.
+          WAIT_FOR_BUDGET: '0'
+        run: ./scripts/sync_project_items.sh
