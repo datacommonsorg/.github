@@ -7,6 +7,8 @@ Org-level defaults and automation for the Data Commons GitHub organization.
 | `SECURITY.md` | Security policy. GitHub falls back to this for every repo in the org that has no `SECURITY.md` of its own. |
 | `scripts/sync_project_items.sh` | Keeps the triage project stocked and tagged. |
 | `.github/workflows/sync-project-items.yml` | Runs that script every 30 minutes. |
+| `scripts/manage_stale_items.sh` | Marks 90-day inactive issues/PRs as stale and closes them after 30 more days. |
+| `.github/workflows/manage-stale-items.yml` | Runs the stale cleanup script daily. |
 
 > [!NOTE]
 > A `README.md` at the root of this repo is just this repo's readme. The org's public profile page comes from `profile/README.md`, which does not exist here. Don't move this file there.
@@ -34,6 +36,21 @@ State lives in the project, not on disk. Each run diffs against the board, so it
 ./scripts/sync_project_items.sh data mixer         # just these
 DRY_RUN=1 ./scripts/sync_project_items.sh          # report, change nothing
 WAIT_FOR_BUDGET=1 ./scripts/sync_project_items.sh  # sit through rate limits
+```
+
+## Stale issue and PR management
+
+`scripts/manage_stale_items.sh` runs daily across all 12 public repos to keep the backlog actionable:
+
+1. **Warning after 90 days:** Open issues and PRs with no activity for 90 days receive a polite notice comment and the `stale` label.
+2. **Auto-close after 30 more days:** Items with the `stale` label that receive no activity for 30 days after the warning (120+ days total) are automatically closed with an invitation to reopen if still relevant.
+3. **Un-stale on new activity:** If someone comments or updates an item after the warning comment, the `stale` label is automatically removed.
+4. **Exemptions:** Items with an active milestone or labeled `keep-open`, `pinned`, or `security` are never marked stale.
+
+```bash
+DRY_RUN=1 ./scripts/manage_stale_items.sh          # preview actions across all repos
+DRY_RUN=1 ./scripts/manage_stale_items.sh mixer    # preview actions for one repo
+./scripts/manage_stale_items.sh mixer              # run live against mixer
 ```
 
 ## Routine tasks
