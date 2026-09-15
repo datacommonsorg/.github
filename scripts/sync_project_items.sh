@@ -183,13 +183,15 @@ gh api graphql --paginate -f query='
 echo "tracked: $(wc -l < "$WORK/tracked.tsv" | tr -d ' ') items already in the project"
 echo
 
-classify() {  # login, account type -> Core | External | Bot
+# Sets $want to Core, External or Bot. Assigns rather than echoes, because a
+# command substitution would fork a subshell for every item in the org.
+classify() {  # login, account type
   if [[ "$2" == "Bot" || "$ROBOTS" == *" $1 "* ]]; then
-    echo Bot
+    want=Bot
   elif [[ "$ROSTER" == *" $1 "* ]]; then
-    echo Core
+    want=Core
   else
-    echo External
+    want=External
   fi
 }
 
@@ -217,7 +219,7 @@ for repo in "${REPOS[@]}"; do
   while IFS=$'\t' read -r url login type; do
     [[ -z "$url" ]] && continue
 
-    want="$(classify "$login" "$type")"
+    classify "$login" "$type"
 
     # What the project currently knows about this item, if anything. read exits
     # non-zero when awk finds no match, which must not trip set -e.
@@ -244,7 +246,11 @@ for repo in "${REPOS[@]}"; do
       added=$((added + 1))
     fi
 
-    eval "option=\$OPTION_$(echo "$want" | tr '[:lower:]' '[:upper:]')"
+    case "$want" in
+      Core)     option="$OPTION_CORE" ;;
+      External) option="$OPTION_EXTERNAL" ;;
+      Bot)      option="$OPTION_BOT" ;;
+    esac
     if retry_write gh project item-edit --id "$item_id" \
          --project-id "$PROJECT_ID" --field-id "$FIELD_ID" \
          --single-select-option-id "$option" >/dev/null; then
