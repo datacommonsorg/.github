@@ -7,6 +7,11 @@ Org-level defaults and automation for the Data Commons GitHub organization.
 | `SECURITY.md` | Security policy. GitHub falls back to this for every repo in the org that has no `SECURITY.md` of its own. |
 | `scripts/sync_project_items.sh` | Keeps the triage project stocked and tagged. |
 | `.github/workflows/sync-project-items.yml` | Runs that script every 30 minutes. |
+| `scripts/upload_coverage.sh` | Uploads test coverage reports to Codacy (report-only). |
+| `scripts/report_changed_lines.sh` | Prints `diff-cover` changed-line coverage on pull requests (report-only). |
+| `scripts/print_jacoco_coverage.py` | Prints per-module line coverage percentages from JaCoCo XML reports. |
+| `actions/upload-coverage/` | Composite action wrapping `scripts/upload_coverage.sh` for GitHub Actions repos. |
+| `actions/report-changed-lines/` | Composite action wrapping `scripts/report_changed_lines.sh` for GitHub Actions repos. |
 
 > [!NOTE]
 > A `README.md` at the root of this repo is just this repo's readme. The org's public profile page comes from `profile/README.md`, which does not exist here. Don't move this file there.
@@ -91,3 +96,25 @@ Running out isn't a failure. The job stops and the next run resumes, which is ho
 **Insights charts have no API.** No mutations, no read fields. Every chart is clicked by hand and can't be reviewed, version-controlled, or restored.
 
 **Archiving erases chart history.** Insights ignores archived items retroactively, so auto-archiving closed items to keep the board tidy silently rewrites your trend data. Pick one.
+
+## Test coverage helpers
+
+Shared, language-agnostic scripts and composite actions used across Data Commons repositories to print changed-line test coverage (`diff-cover`) and upload coverage reports (Cobertura XML, LCOV, or JaCoCo XML) to Codacy in report-only mode. Both scripts always exit `0` so coverage or upload errors never fail CI.
+
+- **GitHub Actions repositories:** reference the composite actions pinned to a full commit SHA:
+  ```yaml
+  - uses: datacommonsorg/.github/actions/report-changed-lines@<commit-sha>
+    with:
+      reports: coverage.xml
+      base-branch: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
+
+  - uses: datacommonsorg/.github/actions/upload-coverage@<commit-sha>
+    with:
+      reports: coverage.xml
+      commit-sha: ${{ github.event.workflow_run.head_sha }}
+      default-branch: main
+      base-branch: ${{ github.event.workflow_run.event == 'pull_request' && 'main' || '' }}
+      branch-name: ${{ github.event.workflow_run.head_branch }}
+      codacy-project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+  ```
+- **Cloud Build repositories:** download `scripts/upload_coverage.sh` or `scripts/report_changed_lines.sh` from `https://raw.githubusercontent.com/datacommonsorg/.github/main/scripts/...` at runtime.

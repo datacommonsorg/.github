@@ -1,0 +1,49 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Report Changed-Line Coverage
+description: >-
+  Prints diff-cover changed-line test coverage for pull requests. Report-only:
+  always exits 0.
+
+inputs:
+  reports:
+    description: >-
+      Space-separated coverage report paths (Cobertura XML, LCOV, or JaCoCo XML)
+      and any extra diff-cover arguments.
+    required: true
+  base-branch:
+    description: Base branch of the pull request (empty skips reporting).
+    required: false
+    default: ""
+  remote:
+    description: Git remote to fetch the base branch from.
+    required: false
+    default: origin
+
+runs:
+  using: composite
+  steps:
+    - name: Report changed-line coverage
+      shell: bash
+      env:
+        COVERAGE_BASE_BRANCH: ${{ inputs.base-branch }}
+        COVERAGE_REMOTE: ${{ inputs.remote }}
+        INPUT_REPORTS: ${{ inputs.reports }}
+      run: |
+        if [[ -d "$GITHUB_WORKSPACE/.venv/bin" ]]; then
+          export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
+        fi
+        read -r -a args <<< "${INPUT_REPORTS//$'\n'/ }"
+        "$GITHUB_ACTION_PATH/../../scripts/report_changed_lines.sh" "${args[@]}"

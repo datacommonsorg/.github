@@ -1,0 +1,58 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Upload Coverage to Codacy
+description: >-
+  Uploads one or more test coverage reports to Codacy using a checksum-verified
+  codacy-coverage-reporter binary. Report-only: always exits 0.
+
+inputs:
+  reports:
+    description: Space-separated <report>[:<prefix>] paths to upload.
+    required: true
+  commit-sha:
+    description: Commit SHA that the coverage reports belong to.
+    required: true
+  default-branch:
+    description: Default branch name that receives coverage uploads.
+    required: false
+    default: main
+  base-branch:
+    description: Base branch of a pull request (empty for push builds).
+    required: false
+    default: ""
+  branch-name:
+    description: Branch name of a push build.
+    required: false
+    default: ""
+  codacy-project-token:
+    description: Codacy project API token (empty logs a skip and exits 0).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Upload coverage reports
+      shell: bash
+      env:
+        COMMIT_SHA: ${{ inputs.commit-sha }}
+        CODACY_DEFAULT_BRANCH: ${{ inputs.default-branch }}
+        _BASE_BRANCH: ${{ inputs.base-branch }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        CODACY_PROJECT_TOKEN: ${{ inputs.codacy-project-token }}
+        INPUT_REPORTS: ${{ inputs.reports }}
+      run: |
+        read -r -a reports <<< "${INPUT_REPORTS//$'\n'/ }"
+        "$GITHUB_ACTION_PATH/../../scripts/upload_coverage.sh" "${reports[@]}"
